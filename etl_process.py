@@ -8,11 +8,11 @@ from psycopg2 import sql
 # PostgreSQL bağlantısı
 # =========================
 conn = psycopg2.connect(
-    dbname="dis-2025",
-    user="vsisp06",
-    password="mb6HbaLL",
-    host="vsisdb.informatik.uni-hamburg.de",
-    port="5432"
+    dbname= #"your dbname",
+    user= #"your username",
+    password= #"your username",
+    host= #"host",
+    port= #"port"
 )
 conn.autocommit = False
 cur = conn.cursor()
@@ -24,13 +24,12 @@ print("[E] Connection established.")
 # =========================
 print("[E] Reading CSV ...")
 sales_df = pd.read_csv(
-    r"C:\Users\User\Desktop\Database\task 6\ressources\sales.csv",
+    #r"your path",
     encoding="latin1",
     sep=';',
     on_bad_lines='skip' 
 )
 
-# 1) Kolon adlarını normalize et ve verilenle eşle
 rename_map = {
     'Date': 'date',
     'Shop': 'shop_name',
@@ -41,12 +40,10 @@ rename_map = {
 sales_df.rename(columns=rename_map, inplace=True)
 sales_df.columns = [c.strip().lower() for c in sales_df.columns]
 
-# 2) Tarih ve sayı dönüşümleri
 print("[T] Casting/cleaning date & numbers ...")
 sales_df['date'] = pd.to_datetime(sales_df['date'], errors='coerce')
 sales_df = sales_df.dropna(subset=['date', 'shop_name', 'article_name'])
 
-# Turnover virgül -> nokta ve float
 sales_df['turnover'] = (
     sales_df['turnover']
       .astype(str)
@@ -56,7 +53,7 @@ sales_df['turnover'] = (
 sales_df['turnover'] = pd.to_numeric(sales_df['turnover'], errors='coerce')
 sales_df['quantity'] = pd.to_numeric(sales_df['quantity'], errors='coerce')
 
-# Negatif/NaN temizle
+# Negatif/NaN cleaning
 before = len(sales_df)
 sales_df = sales_df.dropna(subset=['quantity', 'turnover'])
 sales_df = sales_df[(sales_df['quantity'] >= 0) & (sales_df['turnover'] >= 0)]
@@ -64,12 +61,11 @@ after = len(sales_df)
 print(f"[T] Dropped {before - after} invalid rows.")
 
 # =========================
-# DWH Şema: Star Schema tabloları
+# DWH schema
 # =========================
 print("[L] Ensuring DWH (star) tables exist ...")
 
 ddl_statements = [
-    # Tarih boyutu (DateID surrogate key, FullDate unique)
     """
     CREATE TABLE IF NOT EXISTS dim_date (
         dateid      SERIAL PRIMARY KEY,
@@ -80,7 +76,6 @@ ddl_statements = [
         year        INT NOT NULL
     );
     """,
-    # Mağaza boyutu (ShopKey surrogate, ShopID_src unique)
     """
     CREATE TABLE IF NOT EXISTS dim_shop (
         shop_key        BIGSERIAL PRIMARY KEY,
@@ -91,7 +86,6 @@ ddl_statements = [
         country_name    VARCHAR(255) NOT NULL
     );
     """,
-    # Ürün boyutu (ProductKey surrogate, ArticleID_src unique)
     """
     CREATE TABLE IF NOT EXISTS dim_product (
         product_key             BIGSERIAL PRIMARY KEY,
@@ -103,7 +97,6 @@ ddl_statements = [
         product_category_name   VARCHAR(255) NOT NULL
     );
     """,
-    # Fact (günlük mağaza-ürün)
     """
     CREATE TABLE IF NOT EXISTS fact_sales_star (
         dateid      INT NOT NULL REFERENCES dim_date(dateid),
@@ -115,7 +108,6 @@ ddl_statements = [
         PRIMARY KEY (dateid, shop_key, product_key)
     );
     """,
-    # Performans indeks önerileri
     "CREATE INDEX IF NOT EXISTS ix_fact_shop ON fact_sales_star(shop_key);",
     "CREATE INDEX IF NOT EXISTS ix_fact_product ON fact_sales_star(product_key);"
 ]
@@ -126,8 +118,7 @@ conn.commit()
 print("[L] Star schema tables ready.")
 
 # =========================
-# Kaynak OLTP'den boyutları flatten et
-# =========================
+
 print("[T] Building flattened dimensions from OLTP ...")
 
 # Shop -> City -> Region -> Country
@@ -166,8 +157,7 @@ dim_product_df = pd.DataFrame(rows, columns=[
 print("[T] Flattened dims prepared.")
 
 # =========================
-# dim_shop UPSERT (Type-1)
-# =========================
+
 print("[L] Upserting dim_shop ...")
 upsert_shop_sql = """
 INSERT INTO dim_shop (shopid_src, shop_name, city_name, region_name, country_name)
@@ -188,8 +178,7 @@ if shop_values:
 print("[L] dim_shop done.")
 
 # =========================
-# dim_product UPSERT (Type-1)
-# =========================
+
 print("[L] Upserting dim_product ...")
 upsert_product_sql = """
 INSERT INTO dim_product (articleid_src, article_name, price_eur, product_group_name, product_family_name, product_category_name)
@@ -212,8 +201,7 @@ if prod_values:
 print("[L] dim_product done.")
 
 # =========================
-# CSV'deki adları Article/Shop ID'lerine map et (adı → kaynak ID → surrogate key)
-# =========================
+
 print("[T] Matching CSV names to source IDs ...")
 
 # Article adından id bul
@@ -258,8 +246,7 @@ if not missing_keys.empty:
 sales_df = sales_df.dropna(subset=['shop_key','product_key'])
 
 # =========================
-# dim_date UPSERT + DateID map
-# =========================
+
 print("[T] Building/upserting dim_date ...")
 dates = pd.DataFrame({'fulldate': pd.to_datetime(sales_df['date'].dt.date).drop_duplicates()})
 dates['day'] = dates['fulldate'].dt.day
@@ -286,8 +273,7 @@ sales_df = sales_df.merge(date_map, how='left', left_on='date_only', right_on='f
 sales_df = sales_df.drop(columns=['fulldate'])
 
 # =========================
-# Fact yükleme (aggregate + UPSERT)
-# =========================
+
 print("[L] Loading fact_sales_star ...")
 
 fact_df = (sales_df
@@ -316,3 +302,4 @@ if fact_values:
 cur.close()
 conn.close()
 print("[DONE] ETL (star schema) finished successfully.")
+
