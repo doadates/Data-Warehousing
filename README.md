@@ -57,8 +57,7 @@ The Power BI report connects to the PostgreSQL DWH and visualizes sales data usi
 - Interactive drill-down / roll-up navigation
 - Ability to filter by time period or product category
 
-### Example:
-![Power BI Matrix Example](screenshot.png)
+<img width="1070" height="415" alt="image" src="https://github.com/user-attachments/assets/c517af5e-8a22-4202-9c1b-8a59dc605753" />
 
 ---
 
